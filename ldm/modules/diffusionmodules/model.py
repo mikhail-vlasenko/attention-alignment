@@ -203,6 +203,7 @@ class AttnBlock(nn.Module):
 
 
 def make_attn(in_channels, attn_type="vanilla"):
+    attn_type = 'linear'
     assert attn_type in ["vanilla", "linear", "none"], f'attn_type {attn_type} unknown'
     print(f"making attention of type '{attn_type}' with {in_channels} in_channels")
     if attn_type == "vanilla":
@@ -432,6 +433,7 @@ class Encoder(nn.Module):
                                         padding=1)
 
     def forward(self, x):
+        # x.shape = [batch, in_channels (3), in_resolution, in_resolution]
         # timestep embedding
         temb = None
 
@@ -449,7 +451,7 @@ class Encoder(nn.Module):
         # middle
         h = hs[-1]
         h = self.mid.block_1(h, temb)
-        h = self.mid.attn_1(h)
+        h = self.mid.attn_1(h)  # attn entry point
         h = self.mid.block_2(h, temb)
 
         # end

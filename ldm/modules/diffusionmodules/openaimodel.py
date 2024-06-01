@@ -77,14 +77,19 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
     support it as an extra input.
     """
 
-    def forward(self, x, emb, context=None):
+    def forward(self, x, emb, context=None, ref_latents=None):
         for layer in self:
             if isinstance(layer, TimestepBlock):
                 x = layer(x, emb)
+                for i in range(len(ref_latents)):
+                    ref_latents[i] = layer(ref_latents[i], emb)
+                    # todo: try without env, and how do i change the number of channels in the ref_latents anyway?
             elif isinstance(layer, SpatialTransformer):
-                x = layer(x, context)
+                x = layer(x, context, ref_latents=ref_latents)
             else:
                 x = layer(x)
+                for i in range(len(ref_latents)):
+                    ref_latents[i] = layer(ref_latents[i])
         return x
 
 
@@ -291,6 +296,7 @@ class AttentionBlock(nn.Module):
         use_new_attention_order=False,
     ):
         super().__init__()
+        raise NotImplementedError("this attention is not usually used")
         self.channels = channels
         if num_head_channels == -1:
             self.num_heads = num_heads
@@ -707,7 +713,7 @@ class UNetModel(nn.Module):
         self.middle_block.apply(convert_module_to_f32)
         self.output_blocks.apply(convert_module_to_f32)
 
-    def forward(self, x, timesteps=None, context=None, y=None,**kwargs):
+    def forward(self, x, timesteps=None, context=None, y=None, **kwargs):
         """
         Apply the model to an input batch.
         :param x: an [N x C x ...] Tensor of inputs.
@@ -729,7 +735,7 @@ class UNetModel(nn.Module):
 
         h = x.type(self.dtype)
         for module in self.input_blocks:
-            h = module(h, emb, context)
+            h = module(h, emb, context, ref_latents=kwargs['ref_latents'])
             hs.append(h)
         h = self.middle_block(h, emb, context)
         for module in self.output_blocks:

@@ -180,7 +180,7 @@ class CrossAttention(nn.Module):
             nn.Linear(inner_dim, query_dim),
             nn.Dropout(dropout)
         )
-        self.lam = 0.6
+        self.lam = 1.  # paper uses 0.6
         self.ref_views = 2
 
     def attn_align(self, x_q, reference_latents):
@@ -289,12 +289,15 @@ class SpatialTransformer(nn.Module):
         x = self.proj_in(x)
         x = rearrange(x, 'b c h w -> b (h w) c')
 
-        augmented_ref_latents = []
-        for ref in ref_latents:
-            aug_ref = self.norm(ref)
-            aug_ref = self.proj_in(aug_ref)
-            aug_ref = rearrange(aug_ref, 'b c h w -> b (h w) c')
-            augmented_ref_latents.append(aug_ref)
+        if ref_latents:
+            augmented_ref_latents = []
+            for ref in ref_latents:
+                aug_ref = self.norm(ref)
+                aug_ref = self.proj_in(aug_ref)
+                aug_ref = rearrange(aug_ref, 'b c h w -> b (h w) c')
+                augmented_ref_latents.append(aug_ref)
+        else:
+            augmented_ref_latents = None
 
         for block in self.transformer_blocks:
             x = block(x, context=context, ref_latents=augmented_ref_latents)

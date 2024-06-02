@@ -1,6 +1,7 @@
 """SAMPLING ONLY."""
 
 import torch
+import copy
 import numpy as np
 from tqdm import tqdm
 from functools import partial
@@ -258,5 +259,5 @@ class DDIMSampler(object):
             x_dec, _ = self.p_sample_ddim(x_dec, cond, ts, index=index, use_original_steps=use_original_steps,
                                           unconditional_guidance_scale=unconditional_guidance_scale,
                                           unconditional_conditioning=unconditional_conditioning,
-                                          ref_latents=ref_latents)
+                                          ref_latents=copy.deepcopy(ref_latents))
         return x_dec

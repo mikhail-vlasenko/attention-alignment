@@ -81,15 +81,17 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
         for layer in self:
             if isinstance(layer, TimestepBlock):
                 x = layer(x, emb)
-                for i in range(len(ref_latents)):
-                    ref_latents[i] = layer(ref_latents[i], emb)
-                    # todo: try without env, and how do i change the number of channels in the ref_latents anyway?
+                if ref_latents:
+                    for i in range(len(ref_latents)):
+                        ref_latents[i] = layer(ref_latents[i], emb)
+                        # todo: try without env, and how do i change the number of channels in the ref_latents anyway?
             elif isinstance(layer, SpatialTransformer):
                 x = layer(x, context, ref_latents=ref_latents)
             else:
                 x = layer(x)
-                for i in range(len(ref_latents)):
-                    ref_latents[i] = layer(ref_latents[i])
+                if ref_latents:
+                    for i in range(len(ref_latents)):
+                        ref_latents[i] = layer(ref_latents[i])
         return x
 
 
@@ -737,10 +739,12 @@ class UNetModel(nn.Module):
         for module in self.input_blocks:
             h = module(h, emb, context, ref_latents=kwargs['ref_latents'])
             hs.append(h)
-        h = self.middle_block(h, emb, context)
+        h = self.middle_block(h, emb, context, ref_latents=kwargs['ref_latents'])
         for module in self.output_blocks:
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb, context)
+            # it seems that to apply attn align on the upscaling blocks,
+            # i need to store something like hs for ref_latents
         h = h.type(x.dtype)
         if self.predict_codebook_ids:
             return self.id_predictor(h)

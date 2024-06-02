@@ -166,7 +166,7 @@ class CrossAttention(nn.Module):
             nn.Linear(inner_dim, query_dim),
             nn.Dropout(dropout)
         )
-        self.lam = 1.  # paper uses 0.6
+        self.lam = 0.6  # paper uses 0.6
         self.ref_views = 2
 
     def attn_align(self, x_q, reference_latents):

@@ -236,7 +236,7 @@ def main():
     init_latent = model.get_first_stage_encoding(model.encode_first_stage(init_image))  # move to latent space
 
     # get reference views in latent space
-    refs = ['data/view2.png', 'data/view3.png']
+    refs = ['data/oak_with_leaves.png']
     ref_latents = []
 
     for ref in refs:

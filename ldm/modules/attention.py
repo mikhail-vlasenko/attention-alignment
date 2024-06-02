@@ -166,8 +166,7 @@ class CrossAttention(nn.Module):
             nn.Linear(inner_dim, query_dim),
             nn.Dropout(dropout)
         )
-        self.lam = 0.6  # paper uses 0.6
-        self.ref_views = 2
+        self.lam = 0.6  # paper uses 0.6, lam=1 turns off the mod
 
     def attn_align(self, x_q, reference_latents):
         aligns = []
@@ -230,7 +229,9 @@ class BasicTransformerBlock(nn.Module):
 
     def _forward(self, x, context=None, ref_latents=None):
         x = self.attn1(self.norm1(x), reference_latents=ref_latents) + x
-        x = self.attn2(self.norm2(x), context=context) + x  # todo: also add refs here?
+        # do not add the refs here as this is cross attention with the context
+        # (and paper only talks about modifying self-attention)
+        x = self.attn2(self.norm2(x), context=context) + x
         x = self.ff(self.norm3(x)) + x
         return x
 

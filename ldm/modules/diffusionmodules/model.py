@@ -451,7 +451,7 @@ class Encoder(nn.Module):
         # middle
         h = hs[-1]
         h = self.mid.block_1(h, temb)
-        h = self.mid.attn_1(h)  # attn entry point
+        h = self.mid.attn_1(h)  # attn entry point (but wrong attn)
         h = self.mid.block_2(h, temb)
 
         # end

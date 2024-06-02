@@ -178,8 +178,9 @@ class DDIMSampler(object):
             e_t = self.model.apply_model(x, t, c)
         else:
             x_in = torch.cat([x] * 2)
-            for i in range(len(ref_latents)):
-                ref_latents[i] = torch.cat([ref_latents[i]] * 2)
+            if ref_latents:
+                for i in range(len(ref_latents)):
+                    ref_latents[i] = torch.cat([ref_latents[i]] * 2)
             t_in = torch.cat([t] * 2)
             if isinstance(c, dict):
                 assert isinstance(unconditional_conditioning, dict)

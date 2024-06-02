@@ -84,29 +84,15 @@ class LinearAttention(nn.Module):
         hidden_dim = dim_head * heads
         self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias = False)
         self.to_out = nn.Conv2d(hidden_dim, dim, 1)
-        self.lam = 0.6
-        self.ref_views = 2
 
-    def align_term(self, x):
-        pass
-
-    def qkv_to_out(self, q, k, v, h, w):
+    def forward(self, x):
+        b, c, h, w = x.shape
+        qkv = self.to_qkv(x)
+        q, k, v = rearrange(qkv, 'b (qkv heads c) h w -> qkv b heads c (h w)', heads = self.heads, qkv=3)
         k = k.softmax(dim=-1)
         context = torch.einsum('bhdn,bhen->bhde', k, v)
         out = torch.einsum('bhde,bhdn->bhen', context, q)
         out = rearrange(out, 'b heads c (h w) -> b (heads c) h w', heads=self.heads, h=h, w=w)
-        return out
-
-    def forward(self, x):
-        # x.shape = b, 512, 64, 64
-        b, c, h, w = x.shape
-        qkv = self.to_qkv(x)
-        q, k, v = rearrange(qkv, 'b (qkv heads c) h w -> qkv b heads c (h w)', heads = self.heads, qkv=3)
-        out = self.qkv_to_out(q, k, v, h, w)
-
-        # todo: can do after to_out
-        # out = self.lam * out + (1 - self.lam) * self.align_term(x)
-
         return self.to_out(out)
 
 

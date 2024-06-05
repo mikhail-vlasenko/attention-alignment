@@ -89,7 +89,7 @@ class LinearAttention(nn.Module):
         b, c, h, w = x.shape
         qkv = self.to_qkv(x)
         q, k, v = rearrange(qkv, 'b (qkv heads c) h w -> qkv b heads c (h w)', heads = self.heads, qkv=3)
-        k = k.softmax(dim=-1)  
+        k = k.softmax(dim=-1)
         context = torch.einsum('bhdn,bhen->bhde', k, v)
         out = torch.einsum('bhde,bhdn->bhen', context, q)
         out = rearrange(out, 'b heads c (h w) -> b (heads c) h w', heads=self.heads, h=h, w=w)
@@ -166,8 +166,23 @@ class CrossAttention(nn.Module):
             nn.Linear(inner_dim, query_dim),
             nn.Dropout(dropout)
         )
+        self.lam = 0.6  # paper uses 0.6, lam=1 turns off the mod
 
-    def forward(self, x, context=None, mask=None):
+    def attn_align(self, x_q, reference_latents):
+        aligns = []
+        for ref in reference_latents:
+            k = self.to_k(ref)
+            v = self.to_v(ref)
+            k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=self.heads), (k, v))
+            sim = einsum('b i d, b j d -> b i j', x_q, k) * self.scale
+            attn = sim.softmax(dim=-1)
+            out = einsum('b i j, b j d -> b i d', attn, v)
+            aligns.append(out)
+
+        return torch.mean(torch.stack(aligns), dim=0)
+
+    def forward(self, x, context=None, mask=None, reference_latents=None):
+        # this attention is used during diffusion sampling
         h = self.heads
 
         q = self.to_q(x)
@@ -189,6 +204,10 @@ class CrossAttention(nn.Module):
         attn = sim.softmax(dim=-1)
 
         out = einsum('b i j, b j d -> b i d', attn, v)
+
+        if reference_latents:
+            out = self.lam * out + (1 - self.lam) * self.attn_align(q, reference_latents)
+
         out = rearrange(out, '(b h) n d -> b n (h d)', h=h)
         return self.to_out(out)
 
@@ -205,11 +224,13 @@ class BasicTransformerBlock(nn.Module):
         self.norm3 = nn.LayerNorm(dim)
         self.checkpoint = checkpoint
 
-    def forward(self, x, context=None):
-        return checkpoint(self._forward, (x, context), self.parameters(), self.checkpoint)
+    def forward(self, x, context=None, ref_latents=None):
+        return checkpoint(self._forward, (x, context, ref_latents), self.parameters(), self.checkpoint)
 
-    def _forward(self, x, context=None):
-        x = self.attn1(self.norm1(x)) + x
+    def _forward(self, x, context=None, ref_latents=None):
+        x = self.attn1(self.norm1(x), reference_latents=ref_latents) + x
+        # do not add the refs here as this is cross attention with the context
+        # (and paper only talks about modifying self-attention)
         x = self.attn2(self.norm2(x), context=context) + x
         x = self.ff(self.norm3(x)) + x
         return x
@@ -247,15 +268,26 @@ class SpatialTransformer(nn.Module):
                                               stride=1,
                                               padding=0))
 
-    def forward(self, x, context=None):
+    def forward(self, x, context=None, ref_latents=None):
         # note: if no context is given, cross-attention defaults to self-attention
         b, c, h, w = x.shape
         x_in = x
         x = self.norm(x)
         x = self.proj_in(x)
         x = rearrange(x, 'b c h w -> b (h w) c')
+
+        if ref_latents:
+            augmented_ref_latents = []
+            for ref in ref_latents:
+                aug_ref = self.norm(ref)
+                aug_ref = self.proj_in(aug_ref)
+                aug_ref = rearrange(aug_ref, 'b c h w -> b (h w) c')
+                augmented_ref_latents.append(aug_ref)
+        else:
+            augmented_ref_latents = None
+
         for block in self.transformer_blocks:
-            x = block(x, context=context)
+            x = block(x, context=context, ref_latents=augmented_ref_latents)
         x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
         x = self.proj_out(x)
         return x + x_in

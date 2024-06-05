@@ -1,6 +1,7 @@
 """SAMPLING ONLY."""
 
 import torch
+import copy
 import numpy as np
 from tqdm import tqdm
 from functools import partial
@@ -168,13 +169,18 @@ class DDIMSampler(object):
     @torch.no_grad()
     def p_sample_ddim(self, x, c, t, index, repeat_noise=False, use_original_steps=False, quantize_denoised=False,
                       temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None,
-                      unconditional_guidance_scale=1., unconditional_conditioning=None):
+                      unconditional_guidance_scale=1., unconditional_conditioning=None,
+                      ref_latents=None
+                      ):
         b, *_, device = *x.shape, x.device
 
         if unconditional_conditioning is None or unconditional_guidance_scale == 1.:
             e_t = self.model.apply_model(x, t, c)
         else:
             x_in = torch.cat([x] * 2)
+            if ref_latents:
+                for i in range(len(ref_latents)):
+                    ref_latents[i] = torch.cat([ref_latents[i]] * 2)
             t_in = torch.cat([t] * 2)
             if isinstance(c, dict):
                 assert isinstance(unconditional_conditioning, dict)
@@ -189,7 +195,7 @@ class DDIMSampler(object):
                         c_in[k] = torch.cat([unconditional_conditioning[k], c[k]])
             else:
                 c_in = torch.cat([unconditional_conditioning, c])
-            e_t_uncond, e_t = self.model.apply_model(x_in, t_in, c_in).chunk(2)
+            e_t_uncond, e_t = self.model.apply_model(x_in, t_in, c_in, ref_latents=ref_latents).chunk(2)
             e_t = e_t_uncond + unconditional_guidance_scale * (e_t - e_t_uncond)
 
         if score_corrector is not None:
@@ -236,7 +242,8 @@ class DDIMSampler(object):
 
     @torch.no_grad()
     def decode(self, x_latent, cond, t_start, unconditional_guidance_scale=1.0, unconditional_conditioning=None,
-               use_original_steps=False):
+               use_original_steps=False,
+               ref_latents=None):
 
         timesteps = np.arange(self.ddpm_num_timesteps) if use_original_steps else self.ddim_timesteps
         timesteps = timesteps[:t_start]
@@ -252,5 +259,6 @@ class DDIMSampler(object):
             ts = torch.full((x_latent.shape[0],), step, device=x_latent.device, dtype=torch.long)
             x_dec, _ = self.p_sample_ddim(x_dec, cond, ts, index=index, use_original_steps=use_original_steps,
                                           unconditional_guidance_scale=unconditional_guidance_scale,
-                                          unconditional_conditioning=unconditional_conditioning)
+                                          unconditional_conditioning=unconditional_conditioning,
+                                          ref_latents=copy.deepcopy(ref_latents))
         return x_dec

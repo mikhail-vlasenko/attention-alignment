@@ -432,6 +432,7 @@ class Encoder(nn.Module):
                                         padding=1)
 
     def forward(self, x):
+        # x.shape = [batch, in_channels (3), in_resolution, in_resolution]
         # timestep embedding
         temb = None
 
@@ -449,7 +450,7 @@ class Encoder(nn.Module):
         # middle
         h = hs[-1]
         h = self.mid.block_1(h, temb)
-        h = self.mid.attn_1(h)
+        h = self.mid.attn_1(h)  # attn entry point (but wrong attn)
         h = self.mid.block_2(h, temb)
 
         # end

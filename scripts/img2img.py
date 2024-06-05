@@ -235,6 +235,16 @@ def main():
     init_image = repeat(init_image, '1 ... -> b ...', b=batch_size)
     init_latent = model.get_first_stage_encoding(model.encode_first_stage(init_image))  # move to latent space
 
+    # get reference views in latent space
+    refs = ['data/oak_with_leaves.png']
+    ref_latents = []
+
+    for ref in refs:
+        ref = load_img(ref).to(device)
+        ref = repeat(ref, '1 ... -> b ...', b=batch_size)
+        ref = model.get_first_stage_encoding(model.encode_first_stage(ref))
+        ref_latents.append(ref)
+
     sampler.make_schedule(ddim_num_steps=opt.ddim_steps, ddim_eta=opt.ddim_eta, verbose=False)
 
     assert 0. <= opt.strength <= 1., 'can only work with strength in [0.0, 1.0]'
@@ -260,7 +270,7 @@ def main():
                         z_enc = sampler.stochastic_encode(init_latent, torch.tensor([t_enc]*batch_size).to(device))
                         # decode it
                         samples = sampler.decode(z_enc, c, t_enc, unconditional_guidance_scale=opt.scale,
-                                                 unconditional_conditioning=uc,)
+                                                 unconditional_conditioning=uc, ref_latents=ref_latents)
 
                         x_samples = model.decode_first_stage(samples)
                         x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)
